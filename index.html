@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <title>TrackMe Live 🌍</title>
+
+  <!-- Manifest for PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2b6cb0">
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/684/684908.png" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f4f4f4;
+      overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(90deg, #2b6cb0, #4a90e2);
+      color: white;
+      text-align: center;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 22px;
+      font-weight: 600;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    header img {
+      width: 32px;
+      height: 32px;
+    }
+
+    #map {
+      height: calc(100vh - 150px);
+      width: 100%;
+    }
+
+    .search-box {
+      position: relative;
+      background: #ffffff;
+      padding: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      border-radius: 10px;
+      margin: 10px auto;
+      width: 90%;
+      z-index: 1000;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .search-box button {
+      padding: 10px 14px;
+      background: #2b6cb0;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .search-box button:hover {
+      background: #1a4e8a;
+    }
+
+    @media (max-width: 768px) {
+      .search-box {
+        flex-direction: column;
+        width: 92%;
+      }
+      .search-box input,
+      .search-box button {
+        width: 100%;
+        font-size: 16px;
+      }
+      #map {
+        height: calc(100vh - 220px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="https://cdn-icons-png.flaticon.com/512/684/684908.png" alt="Logo">
+    <span>TrackMe Live</span>
+  </header>
+
+  <div class="search-box">
+    <input type="text" id="start" placeholder="Start location" />
+    <input type="text" id="end" placeholder="Destination" />
+    <button onclick="getRoute()">🧭 Get Route</button>
+    <button onclick="trackUser()">📍 Live Tracking</button>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+  <script>
+    const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    });
+
+    const satelliteMap = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri — Source: Esri, Earthstar Geographics' }
+    );
+
+    const map = L.map('map', {
+      center: [17.385, 78.4867],
+      zoom: 13,
+      layers: [streetMap]
+    });
+
+    L.control.layers({
+      "🗺️ Street": streetMap,
+      "🛰️ Satellite": satelliteMap
+    }).addTo(map);
+
+    map.on('click', e => {
+      L.popup().setLatLng(e.latlng).setContent("📍 " + e.latlng.lat.toFixed(4) + ", " + e.latlng.lng.toFixed(4)).openOn(map);
+    });
+
+    const pois = [
+      { name: "Restaurant A", lat: 17.389, lon: 78.478, type: "🍴 Restaurant" },
+      { name: "Hospital B", lat: 17.392, lon: 78.482, type: "🏥 Hospital" },
+      { name: "Tourist Spot C", lat: 17.375, lon: 78.486, type: "🏛️ Tourist Spot" }
+    ];
+    pois.forEach(poi => {
+      L.marker([poi.lat, poi.lon]).addTo(map).bindPopup(`<b>${poi.name}</b><br>${poi.type}`);
+    });
+
+    let control;
+    async function geocode(query) {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      return data.length ? data[0] : null;
+    }
+
+    async function getRoute() {
+      const start = document.getElementById("start").value;
+      const end = document.getElementById("end").value;
+      if (!start || !end) return alert("Enter both start and destination");
+
+      const s = await geocode(start);
+      const e = await geocode(end);
+      if (!s || !e) return alert("Location not found");
+
+      if (control) map.removeControl(control);
+
+      control = L.Routing.control({
+        waypoints: [L.latLng(s.lat, s.lon), L.latLng(e.lat, e.lon)],
+        routeWhileDragging: true
+      }).addTo(map);
+    }
+
+    let userMarker, accuracyCircle;
+    function trackUser() {
+      if (!navigator.geolocation) return alert("Your device doesn't support GPS.");
+
+      navigator.geolocation.watchPosition(
+        pos => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          if (userMarker) {
+            userMarker.setLatLng([latitude, longitude]);
+            accuracyCircle.setLatLng([latitude, longitude]).setRadius(accuracy);
+          } else {
+            userMarker = L.marker([latitude, longitude]).addTo(map).bindPopup("📍 You are here");
+            accuracyCircle = L.circle([latitude, longitude], { radius: accuracy, color: "blue", opacity: 0.3 }).addTo(map);
+          }
+          map.setView([latitude, longitude], 16);
+        },
+        err => alert("Unable to fetch location: " + err.message),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+      );
+    }
+
+    // Register the service worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js");
+      });
+    }
+  </script>
+</body>
+</html>
